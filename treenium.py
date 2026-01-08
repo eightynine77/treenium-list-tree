@@ -4,7 +4,7 @@ import sys
 
 def parse_arguments():
     parser = argparse.ArgumentParser(add_help=False)
-    
+
     parser.add_argument("root_directory", nargs="?", default=".")
     parser.add_argument("-h", "--help", action="store_true")
 
@@ -18,15 +18,14 @@ def parse_arguments():
 
     args, unknown = parser.parse_known_args()
     if unknown:
-        # 'unknown' is a list, e.g., ['--test', '--foo']
-        # We grab the first one to show the user, or join them all
+
         unknown_command = unknown[0] 
-        
+
         print(f'ERROR: unknown command "{unknown_command}"')
         print('')
         print('type -h or --help to see list of all available commands')
         sys.exit(1)
-    
+
     has_excludes = args.exclude_files or args.exclude_extensions or args.exclude_directories
     has_includes = args.include_files or args.include_extensions or args.include_directories
 
@@ -84,37 +83,34 @@ def parse_arguments():
     return args
 
 def should_exclude(name, is_dir, args):
-    # Exclude directories by exact name
+
     if is_dir and name in args.exclude_directories:
         return True
-    
-    # Exclude files by exact name
+
     if not is_dir and name in args.exclude_files:
         return True
-    
-    # Exclude files by extension
+
     if not is_dir:
         _, ext = os.path.splitext(name)
         if ext in args.exclude_extensions:
             return True
-            
+
     return False
 
 def should_include_file(name, args):
     """
     Checks if a specific file matches the inclusion criteria.
     """
-    # 1. Check exact filename match (handles no-extension files too)
+
     if args.include_files and name in args.include_files:
         return True
-    
-    # 2. Check extension match
+
     if args.include_extensions:
         _, ext = os.path.splitext(name)
-        # If the file has no extension, os.path.splitext returns empty string for ext
+
         if ext in args.include_extensions:
             return True
-            
+
     return False
 
 def has_matching_content(directory, args):
@@ -124,19 +120,19 @@ def has_matching_content(directory, args):
     This is used to 'prune' empty directories from the view.
     """
     try:
-        # We need to look at everything in this directory
+
         for item in os.listdir(directory):
             full_path = os.path.join(directory, item)
-            
+
             if os.path.isdir(full_path):
-                # If the directory name itself is whitelist, we keep it AND everything inside
+
                 if args.include_directories and item in args.include_directories:
                     return True
-                # Otherwise, we have to check inside it
+
                 if has_matching_content(full_path, args):
                     return True
             else:
-                # It's a file, does it match?
+
                 if should_include_file(item, args):
                     return True
     except OSError:
@@ -148,12 +144,11 @@ def print_tree(directory, padding, print_files, args, force_show_all=False):
         print(f"Error: '{directory}' is not a directory.")
         return
 
-    # specific standard ASCII characters
     PIPE = "|"
     ELBOW = "\\"
     TEE = "+"
     dash = "-" 
-    
+
     try:
         items = os.listdir(directory)
     except PermissionError:
@@ -163,20 +158,17 @@ def print_tree(directory, padding, print_files, args, force_show_all=False):
         print(padding + f"[Error: {e}]")
         return
 
-    # Sort files for consistent order (case-insensitive)
     items.sort(key=lambda s: s.lower())
 
     inclusion_mode = (args.include_files or 
                       args.include_extensions or 
                       args.include_directories)
-    
-    # Filter out excluded items
+
     filtered_items = []
     for item in items:
         full_path = os.path.join(directory, item)
         is_dir = os.path.isdir(full_path)
-        
-        # If we are in a "force show" state (inside a matched -id folder), shows everything
+
         if force_show_all:
             filtered_items.append(item)
             continue
@@ -184,20 +176,20 @@ def print_tree(directory, padding, print_files, args, force_show_all=False):
         if inclusion_mode:
             keep = False
             if is_dir:
-                # If matches -id, we keep it (and will force show children later)
+
                 if args.include_directories and item in args.include_directories:
                     keep = True
-                # Else if it has relevant content deep down, we keep it (pathway)
+
                 elif has_matching_content(full_path, args):
                     keep = True
             else:
                 if should_include_file(item, args):
                     keep = True
-            
+
             if keep:
                 filtered_items.append(item)
         else:
-            # Exclusion mode
+
             if not should_exclude(item, is_dir, args):
                 filtered_items.append(item)
 
@@ -210,18 +202,14 @@ def print_tree(directory, padding, print_files, args, force_show_all=False):
         full_path = os.path.join(directory, item)
         if os.path.isdir(full_path):
             new_padding = padding + ("    " if is_last else f"{PIPE}   ")
-            
-            # Determine if we should force show children
-            # We force show if we are ALREADY forcing, OR if this specific folder matches -id
+
             will_force = force_show_all or (inclusion_mode and args.include_directories and item in args.include_directories)
-            
+
             print_tree(full_path, new_padding, print_files, args, force_show_all=will_force)
 
 def main():
     args = parse_arguments()
-    
-    # Normalize extensions to ensure they match (e.g., user types "py", we check ".py")
-    # But user might type ".py", so we handle both.
+
     def normalize_exts(ext_list):
         norm = []
         for ext in ext_list:
@@ -231,7 +219,6 @@ def main():
                 norm.append(ext)
         return norm
 
-    # Apply to both lists
     args.exclude_extensions = normalize_exts(args.exclude_extensions)
     args.include_extensions = normalize_exts(args.include_extensions)
 
